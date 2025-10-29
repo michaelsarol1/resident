@@ -178,6 +178,10 @@ public java.util.List<java.util.Map<String, Object>> fetchRecords(String sqlQuer
     return records;
 }
 
+    public void closeDB() {
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }
+
 
     
 }
