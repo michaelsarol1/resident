@@ -2,8 +2,9 @@ package main;
 
 import config.config;
 import java.util.Scanner;
+import services.PurokService; // NEW IMPORT
 import services.ResidentService;
-import services.UserService; // FIX 1: Corrected package capitalization
+import services.UserService;
 
 public class main {
 
@@ -13,9 +14,16 @@ public class main {
         Scanner sc = new Scanner(System.in);
         char cont = 0;
 
-        // FIX 2: Removed duplicate 'new' keyword
-        UserService userService = new UserService(db); 
-        ResidentService residentService = new ResidentService(db);
+        // --- FIX REQUIRED HERE ---
+        // 1. Instantiate the database utility services first (PurokService)
+        PurokService purokService = new PurokService(db);
+        
+        // 2. Instantiate ResidentService, passing the required dependency (PurokService)
+        ResidentService residentService = new ResidentService(db, purokService);
+
+        // 3. Instantiate UserService
+        UserService userService = new UserService(db);
+        // --- END OF FIX ---
 
         do {
             System.out.println("\n===== PUROK RESIDENCE INFORMATION SYSTEM =====");
@@ -27,10 +35,10 @@ public class main {
 
             if (sc.hasNextInt()) {
                 choice = sc.nextInt();
-                sc.nextLine(); // Consume newline
+                sc.nextLine();
             } else {
                 System.out.println("🛑 Error: Invalid input. Please enter a number.");
-                sc.nextLine(); // Consume invalid input
+                sc.nextLine();
                 continue;
             }
 
@@ -40,25 +48,36 @@ public class main {
                     break;
 
                 case 2: 
-                    // Login returns the role and runs the appropriate menu
+                    // Pass the correctly instantiated ResidentService instance to loginUser
                     userService.loginUser(sc, residentService); 
                     break;
                     
-                case 0: System.exit(0); break;
-                default: System.out.println("Invalid choice!");
+                case 0: 
+                    System.out.println("Program Ended. Goodbye! 👋");
+                    sc.close();
+                    db.closeDB(); // Ensure DB connection is closed gracefully
+                    System.exit(0); 
+                    break;
+                default: 
+                    System.out.println("Invalid choice!");
             }
 
             System.out.print("\nDo you want to continue? (Y/N): ");
-            // Handle Y/N input validation
-            String continueInput = sc.next();
-            // FIX 3: Simplified initialization of cont (char cont = 0; is unnecessary)
-            cont = continueInput.isEmpty() ? 'N' : continueInput.charAt(0); 
-            sc.nextLine();
+            
+            // Consume the rest of the line to safely get input
+            String continueInput = sc.nextLine();
+            
+            // Check if input is empty or just use the first character
+            if (continueInput.isEmpty()) {
+                cont = 'N';
+            } else {
+                cont = continueInput.charAt(0);
+            }
 
         } while (cont == 'Y' || cont == 'y');
 
         System.out.println("Program Ended. Goodbye! 👋");
         sc.close();
-        db.closeDB(); // Assuming a closeDB method exists in config
+        db.closeDB();
     }
 }

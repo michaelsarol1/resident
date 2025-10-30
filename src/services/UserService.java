@@ -36,18 +36,45 @@ public class UserService {
         }
 
         System.out.println("\n--- All System Users ---");
-        System.out.printf("%-5s %-20s %-25s %-10s %-10s\n", headers[0], headers[1], headers[2], headers[3], headers[4]);
-        System.out.println("----------------------------------------------------------------------");
+        System.out.printf("%-5s %-20s %-25s %-10s %-15s\n", headers[0], headers[1], headers[2], headers[3], headers[4]);
+        System.out.println("---------------------------------------------------------------------------------");
         
         for (Map<String, Object> record : result) {
-            System.out.printf("%-5s %-20s %-25s %-10s %-10s\n", 
+            System.out.printf("%-5s %-20s %-25s %-10s %-15s\n", 
                 record.get(cols[0]), 
                 record.get(cols[1]), 
                 record.get(cols[2]), 
                 record.get(cols[3]),
                 record.get(cols[4]));
         }
-        System.out.println("----------------------------------------------------------------------");
+        System.out.println("---------------------------------------------------------------------------------");
+    }
+
+    private void viewUsersByStatus(String status) {
+        String query = "SELECT u_id, u_name, u_email, u_type, u_status FROM users WHERE u_status = ?";
+        String[] headers = {"ID", "Name", "Email", "Type", "Status"};
+        String[] cols = {"u_id", "u_name", "u_email", "u_type", "u_status"};
+        
+        List<Map<String, Object>> result = db.fetchRecords(query, status);
+        
+        if (result.isEmpty()) {
+            System.out.println("\nNo users found with status **" + status + "**.");
+            return;
+        }
+
+        System.out.println("\n--- System Users with Status: " + status + " ---");
+        System.out.printf("%-5s %-20s %-25s %-10s %-15s\n", headers[0], headers[1], headers[2], headers[3], headers[4]);
+        System.out.println("---------------------------------------------------------------------------------");
+        
+        for (Map<String, Object> record : result) {
+            System.out.printf("%-5s %-20s %-25s %-10s %-15s\n", 
+                record.get(cols[0]), 
+                record.get(cols[1]), 
+                record.get(cols[2]), 
+                record.get(cols[3]),
+                record.get(cols[4]));
+        }
+        System.out.println("---------------------------------------------------------------------------------");
     }
 
     // ===================== USER CRUD/FLOW ===========================
@@ -60,23 +87,22 @@ public class UserService {
         System.out.print("Enter password: ");
         String pass = sc.nextLine();
         
-        // **MODIFICATION: Prompt changed to Admin/Staff only**
         System.out.print("Enter type (Admin/Staff): ");
         String typeInput = sc.nextLine();
         String typeToStore;
 
-        // Logic to restrict registration to only Admin or Staff
         if (typeInput.equalsIgnoreCase("Admin") || typeInput.equalsIgnoreCase("Staff")) {
             typeToStore = typeInput;
         } else {
-            // **MODIFICATION: Updated error message**
             System.out.println("🛑 Registration Failed: Invalid type entered. New users must be registered as **Admin** or **Staff**.");
-            return; // Exit the method without adding a record
+            return;
         }
 
         String regSql = "INSERT INTO users(u_name, u_email, u_type, u_status, u_pass) VALUES (?, ?, ?, ?, ?)";
-        db.addRecord(regSql, name, email, typeToStore, "Active", pass); 
-        System.out.println("User registered successfully! 🎉 Account is **Active**.");
+        
+        db.addRecord(regSql, name, email, typeToStore, "Pending", pass); 
+        
+        System.out.println("User registered successfully! 🎉 Account is **Pending** Admin approval before login.");
     }
 
     public void loginUser(Scanner sc, ResidentService residentService) {
@@ -102,7 +128,6 @@ public class UserService {
                 if (role.equalsIgnoreCase("Admin")) adminMenu(sc, residentService);
                 else if (role.equalsIgnoreCase("Staff")) staffMenu(sc, residentService);
                 else {
-                    // This case should ideally not happen with the new registration logic
                     System.out.println("🛑 Error: Your account type is unsupported for login: " + role);
                 }
             } else {
@@ -117,21 +142,24 @@ public class UserService {
         int choice = 0;
         do {
             System.out.println("\n--- ADMIN MENU ---");
-            System.out.println("1. Residence and Purok Management");
-            System.out.println("2. Manage User Accounts");
+            System.out.println("1. Resident Management"); // NEW SEPARATE OPTION
+            System.out.println("2. Purok Management"); // NEW SEPARATE OPTION
+            System.out.println("3. Manage User Accounts"); // SHIFTED OPTION
             System.out.println("0. Logout");
             System.out.print("Choice: ");
-             if (!sc.hasNextInt()) {
-                 System.out.println("🛑 Error: Invalid input. Please enter a number.");
-                 sc.nextLine(); 
-                 continue;
-             }
+            if (!sc.hasNextInt()) {
+                System.out.println("🛑 Error: Invalid input. Please enter a number.");
+                sc.nextLine();
+                continue;
+            }
             choice = sc.nextInt();
             sc.nextLine();
 
             switch (choice) {
-                case 1: residentService.dataManagementMenu(sc); break;
-                case 2: manageUsers(sc); break; 
+                // Calls the public management methods now exposed by ResidentService
+                case 1: residentService.manageResidents(sc); break;
+                case 2: residentService.managePuroks(sc); break; 
+                case 3: manageUsers(sc); break;
                 case 0: return;
                 default: System.out.println("Invalid choice!");
             }
@@ -153,6 +181,7 @@ public class UserService {
                 continue;
             }
             choice = sc.nextInt();
+            sc.nextLine(); // consume newline
 
             switch (choice) {
                 case 1: residentService.viewResidentsByPurok(sc); break; 
@@ -164,8 +193,6 @@ public class UserService {
         } while (choice != 0);
     }
     
-    // No dedicated resident/purokleader menu is needed as registration is restricted
-
     // ===================== ADMIN MANAGEMENT FUNCTIONS ===========================
     
     private void manageUsers(Scanner sc) {
@@ -173,64 +200,26 @@ public class UserService {
         do {
             System.out.println("\n--- MANAGE USER ACCOUNTS ---");
             System.out.println("1. View All Users");
-            System.out.println("2. Change User Status");
-            System.out.println("3. Delete User Account"); 
+            System.out.println("2. View Pending Users"); 
+            System.out.println("3. Delete User Account");
             System.out.println("0. Back to Admin Menu");
             System.out.print("Choice: ");
             if (!sc.hasNextInt()) {
-                   System.out.println("🛑 Error: Invalid input. Please enter a number.");
-                   sc.nextLine(); 
-                   continue;
+                    System.out.println("🛑 Error: Invalid input. Please enter a number.");
+                    sc.nextLine(); 
+                    continue;
             }
             subChoice = sc.nextInt();
             sc.nextLine(); 
 
             switch (subChoice) {
-                case 1:
-                    viewAllUsers();
-                    break;
-                case 2:
-                    changeUserStatus(sc); 
-                    break;
-                case 3:
-                    deleteUser(sc); 
-                    break;
-                case 0:
-                    return;
-                default:
-                    System.out.println("Invalid choice!");
+                case 1: viewAllUsers(); break;
+                case 2: viewUsersByStatus("Pending"); break;
+                case 3: deleteUser(sc); break;
+                case 0: return;
+                default: System.out.println("Invalid choice!");
             }
         } while (subChoice != 0);
-    }
-
-    private void changeUserStatus(Scanner sc) {
-        viewAllUsers();
-        System.out.print("Enter User ID to update status: ");
-        int userId;
-        if (sc.hasNextInt()) {
-            userId = sc.nextInt();
-        } else {
-               System.out.println("🛑 Error: Invalid input. Please enter a number.");
-               sc.nextLine(); 
-               return;
-        }
-        sc.nextLine(); 
-        
-        if (!userExists(userId)) {
-            System.out.println("🛑 Error: User ID " + userId + " does not exist. Returning to menu.");
-            return; 
-        }
-        
-        System.out.print("Enter new status (Active, Pending, Deactivated): ");
-        String newStatus = sc.nextLine();
-        
-        if (!newStatus.equalsIgnoreCase("Active") && !newStatus.equalsIgnoreCase("Pending") && !newStatus.equalsIgnoreCase("Deactivated")) {
-            System.out.println("🛑 Error: Invalid status. Must be Active, Pending, or Deactivated.");
-            return;
-        }
-
-        db.updateRecord("UPDATE users SET u_status = ? WHERE u_id = ?", newStatus, userId);
-        System.out.println("User ID " + userId + " status updated to **" + newStatus + "** successfully. 🎉");
     }
     
     private void deleteUser(Scanner sc) {
