@@ -2,18 +2,18 @@ package services;
 
 import config.config;
 import java.util.*;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public class ResidentService {
     private final config db;
-    private final PurokService purokService; // Reference to the new service
+    private final PurokService purokService;
 
-    // Constructor now takes both config and the new PurokService
     public ResidentService(config db, PurokService purokService) {
         this.db = db;
         this.purokService = purokService;
     }
 
-    // ===================== ID VALIDATION HELPERS ===========================
 
     private boolean residentExists(int residentId) {
         String query = "SELECT COUNT(r_id) AS Count FROM residents WHERE r_id = ?";
@@ -26,22 +26,23 @@ public class ResidentService {
         return false;
     }
 
-    // ===================== VIEW FUNCTIONS ===========================
 
     public void viewResidents() {
-        String query = "SELECT r.r_id, r.r_name, r.r_age, r.r_gender, p.p_name AS purok_name FROM residents r JOIN puroks p ON r.r_purok_id = p.p_id";
-        String[] headers = {"ID", "Name", "Age", "Gender", "Purok Name"};
-        String[] cols = {"r_id", "r_name", "r_age", "r_gender", "purok_name"};
+        String query = "SELECT r.r_id, r.r_name, r.r_age, r.r_gender, r.r_contact, r.r_registration_date, p.p_name AS purok_name " +
+                       "FROM residents r JOIN puroks p ON r.r_purok_id = p.p_id";
+        
+        String[] headers = {"ID", "Name", "Age", "Gender", "Contact", "Reg Date", "Purok Name"};
+        String[] cols = {"r_id", "r_name", "r_age", "r_gender", "r_contact", "r_registration_date", "purok_name"};
+        
         db.viewRecords(query, headers, cols);
     }
     
-    // The viewPuroks() method is MOVED to PurokService
     public void viewPuroks() {
         purokService.viewPuroks();
     }
     
     public void viewResidentsByPurok(Scanner sc) {
-        purokService.viewPuroks(); // Use PurokService for the view
+        purokService.viewPuroks();
         
         System.out.print("\nEnter Purok ID to view residents: ");
         int purokId;
@@ -54,14 +55,15 @@ public class ResidentService {
         }
         sc.nextLine();
 
-        if (!purokService.purokExists(purokId)) { // Use PurokService for validation
+        if (!purokService.purokExists(purokId)) {
             System.out.println("🛑 Error: Purok ID " + purokId + " does not exist.");
             return;
         }
 
-        String query = "SELECT r_id, r_name, r_age, r_gender FROM residents WHERE r_purok_id = ?";
-        String[] headers = {"ID", "Name", "Age", "Gender"};
-        String[] cols = {"r_id", "r_name", "r_age", "r_gender"};
+        String query = "SELECT r_id, r_name, r_age, r_gender, r_contact, r_registration_date FROM residents WHERE r_purok_id = ?";
+        
+        String[] headers = {"ID", "Name", "Age", "Gender", "Contact", "Reg Date"};
+        String[] cols = {"r_id", "r_name", "r_age", "r_gender", "r_contact", "r_registration_date"};
         
         List<Map<String, Object>> result = db.fetchRecords(query, purokId);
         
@@ -72,23 +74,26 @@ public class ResidentService {
 
         System.out.println("\n--- Residents in Purok ID " + purokId + " ---");
         
-        System.out.printf("%-5s %-20s %-5s %-10s\n", headers[0], headers[1], headers[2], headers[3]);
-        System.out.println("--------------------------------------------");
+        System.out.printf("%-5s %-20s %-5s %-10s %-15s %-15s\n", 
+            headers[0], headers[1], headers[2], headers[3], headers[4], headers[5]);
+        System.out.println("--------------------------------------------------------------------------------");
         
         for (Map<String, Object> record : result) {
-            System.out.printf("%-5s %-20s %-5s %-10s\n", 
+            System.out.printf("%-5s %-20s %-5s %-10s %-15s %-15s\n", 
                 record.get(cols[0]), 
                 record.get(cols[1]), 
                 record.get(cols[2]), 
-                record.get(cols[3]));
+                record.get(cols[3]),
+                record.get(cols[4]),
+                record.get(cols[5]));
         }
-        System.out.println("--------------------------------------------");
+        System.out.println("--------------------------------------------------------------------------------");
     }
 
     public void viewMyPurokInfo(String email) {
         String p_query = "SELECT p.p_id, p.p_name " +
-                          "FROM puroks p JOIN residents r ON p.p_id = r.r_purok_id " +
-                          "JOIN users u ON r.r_name = u.u_name WHERE u.u_email = ?"; 
+                             "FROM puroks p JOIN residents r ON p.p_id = r.r_purok_id " +
+                             "JOIN users u ON r.r_name = u.u_name WHERE u.u_email = ?"; 
         List<Map<String, Object>> p_result = db.fetchRecords(p_query, email); 
         
         if (!p_result.isEmpty()) {
@@ -99,14 +104,13 @@ public class ResidentService {
         } else { System.out.println("No purok information found (Is your user name linked to a resident?)."); }
     }
 
-    // ===================== DATA MANAGEMENT MENU ===========================
 
     public void dataManagementMenu(Scanner sc) {
         int subChoice = 0;
         do {
             System.out.println("\n--- DATA MANAGEMENT MENU ---");
             System.out.println("1. Manage Residents");
-            System.out.println("2. Manage Puroks"); // Delegates to PurokService
+            System.out.println("2. Manage Puroks");
             System.out.println("0. Back to Admin Menu");
             System.out.print("Choice: ");
             if (!sc.hasNextInt()) {
@@ -119,14 +123,13 @@ public class ResidentService {
 
             switch (subChoice) {
                 case 1: manageResidents(sc); break;
-                case 2: purokService.managePuroks(sc); break; // DELEGATED!
+                case 2: purokService.managePuroks(sc); break;
                 case 0: return;
                 default: System.out.println("Invalid choice!");
             }
         } while (subChoice != 0);
     }
 
-    // ===================== RESIDENT CRUD ===========================
     
     void manageResidents(Scanner sc) {
         int choice = 0;
@@ -145,7 +148,7 @@ public class ResidentService {
                 continue;
             }
             choice = sc.nextInt();
-            sc.nextLine(); // Consume newline after choice
+            sc.nextLine();
 
             switch (choice) {
                 case 1: addResident(sc); break;
@@ -162,6 +165,7 @@ public class ResidentService {
     private void addResident(Scanner sc) {
         System.out.print("Enter resident name: ");
         String rname = sc.nextLine();
+        
         System.out.print("Enter age: ");
         int age;
         if (sc.hasNextInt()) {
@@ -171,12 +175,19 @@ public class ResidentService {
             sc.nextLine();
             return;
         }
-        sc.nextLine(); // Consume newline after age
+        sc.nextLine();
+        
         System.out.print("Enter gender: ");
         String gen = sc.nextLine();
         
+        System.out.print("Enter contact number: ");
+        String contact = sc.nextLine(); 
+        
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+        String regDate = dateFormat.format(new Date());
+        
         System.out.println("\n--- Available Puroks ---");
-        purokService.viewPuroks(); // Use PurokService to list available Puroks
+        purokService.viewPuroks();
         System.out.print("Enter Purok ID (must be an existing ID above): ");
         int p_id;
         if (sc.hasNextInt()) {
@@ -188,13 +199,15 @@ public class ResidentService {
         }
         sc.nextLine();
         
-        if (!purokService.purokExists(p_id)) { // Use PurokService for validation
+        if (!purokService.purokExists(p_id)) {
             System.out.println("🛑 Error: Cannot add resident. Purok ID " + p_id + " does not exist. Register the Purok first.");
             return;
         }
 
-        db.addRecord("INSERT INTO residents(r_name, r_age, r_gender, r_purok_id) VALUES (?, ?, ?, ?)", rname, age, gen, p_id);
+        String sql = "INSERT INTO residents(r_name, r_age, r_gender, r_contact, r_registration_date, r_purok_id) VALUES (?, ?, ?, ?, ?, ?)";
+        db.addRecord(sql, rname, age, gen, contact, regDate, p_id);
         System.out.println("Resident added successfully. 🎉");
+        System.out.println("Registration Date recorded as: " + regDate);
     }
 
     private void updateResident(Scanner sc) {
@@ -209,7 +222,7 @@ public class ResidentService {
             sc.nextLine();
             return;
         }
-        sc.nextLine(); // Consume newline
+        sc.nextLine();
         
         if (!residentExists(rid)) {
             System.out.println("🛑 Error: Resident ID " + rid + " does not exist. Returning to menu.");
@@ -227,12 +240,15 @@ public class ResidentService {
             sc.nextLine();
             return;
         }
-        sc.nextLine(); // Consume newline
+        sc.nextLine();
         System.out.print("New gender: ");
         String newGender = sc.nextLine();
-        
+
+        System.out.print("New contact number: ");
+        String newContact = sc.nextLine();
+          
         System.out.println("\n--- Available Puroks ---");
-        purokService.viewPuroks(); // Use PurokService to list available Puroks
+        purokService.viewPuroks();
         System.out.print("New Purok ID (must be an existing ID): ");
         int newPId;
         if (sc.hasNextInt()) {
@@ -244,12 +260,13 @@ public class ResidentService {
         }
         sc.nextLine();
         
-        if (!purokService.purokExists(newPId)) { // Use PurokService for validation
+        if (!purokService.purokExists(newPId)) {
             System.out.println("🛑 Error: Cannot update resident. Purok ID " + newPId + " does not exist.");
             return;
         }
 
-        db.updateRecord("UPDATE residents SET r_name = ?, r_age = ?, r_gender = ?, r_purok_id = ? WHERE r_id = ?", newName, newAge, newGender, newPId, rid);
+        String sql = "UPDATE residents SET r_name = ?, r_age = ?, r_gender = ?, r_contact = ?, r_purok_id = ? WHERE r_id = ?";
+        db.updateRecord(sql, newName, newAge, newGender, newContact, newPId, rid);
         System.out.println("Resident updated successfully. ✅");
     }
 
@@ -275,8 +292,8 @@ public class ResidentService {
         db.deleteRecord("DELETE FROM residents WHERE r_id = ?", delId);
         System.out.println("Resident deleted successfully. 🗑️");
     }
-
-    void managePuroks(Scanner sc) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-    }
+    public void managePuroks(Scanner sc) {
+    purokService.managePuroks(sc);
+}
+   
 }

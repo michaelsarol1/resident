@@ -102,27 +102,47 @@ public class PurokService {
     }
 
     private void deletePurok(Scanner sc) {
-        System.out.println("\n--- Current Puroks ---");
-        viewPuroks();
-        System.out.print("Enter Purok ID to delete: ");
-        int delPId;
-        if (sc.hasNextInt()) {
-            delPId = sc.nextInt();
-        } else {
-            System.out.println("🛑 Error: Invalid Purok ID input. Returning to menu.");
-            sc.nextLine();
-            return;
-        }
+    System.out.println("\n--- Current Puroks ---");
+    viewPuroks();
+    System.out.print("Enter Purok ID to delete: ");
+    int delPId;
+    if (sc.hasNextInt()) {
+        delPId = sc.nextInt();
+    } else {
+        System.out.println("🛑 Error: Invalid Purok ID input. Returning to menu.");
         sc.nextLine();
-
-        if (!purokExists(delPId)) {
-            System.out.println("🛑 Error: Purok ID " + delPId + " does not exist. Returning to menu.");
-            return;
-        }
-
-        // NOTE: A real application should check if the Purok has active residents 
-        // before deletion to prevent database errors.
-        db.deleteRecord("DELETE FROM puroks WHERE p_id = ?", delPId);
-        System.out.println("Purok deleted successfully. 🗑️");
+        return;
     }
+    sc.nextLine();
+
+    if (!purokExists(delPId)) {
+        System.out.println("🛑 Error: Purok ID " + delPId + " does not exist. Returning to menu.");
+        return;
+    }
+
+    // ⭐ START OF FIX: Data Integrity Check ⭐
+    String residentCountQuery = "SELECT COUNT(*) AS count FROM residents WHERE r_purok_id = ?";
+    List<Map<String, Object>> residentResult = db.fetchRecords(residentCountQuery, delPId);
+    long residentCount = 0;
+    
+    if (!residentResult.isEmpty()) {
+        Object countObj = residentResult.get(0).get("count");
+        if (countObj instanceof Long) {
+            residentCount = (Long) countObj;
+        } else if (countObj instanceof Integer) {
+            residentCount = (Integer) countObj;
+        }
+    }
+
+    if (residentCount > 0) {
+        System.out.println("🛑 Error: Cannot delete Purok ID " + delPId + ".");
+        System.out.println("There are " + residentCount + " resident(s) still assigned to this Purok. Delete residents first.");
+        return; // Exit the method without deleting
+    }
+    // ⭐ END OF FIX ⭐
+
+    // If the count is 0, proceed with deletion
+    db.deleteRecord("DELETE FROM puroks WHERE p_id = ?", delPId);
+    System.out.println("Purok deleted successfully. 🗑️");
+}
 }

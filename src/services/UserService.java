@@ -10,7 +10,6 @@ public class UserService {
         this.db = db;
     }
 
-    // ===================== ID VALIDATION HELPERS ===========================
 
     private boolean userExists(int userId) {
         String query = "SELECT COUNT(u_id) AS Count FROM users WHERE u_id = ?";
@@ -22,6 +21,12 @@ public class UserService {
         }
         return false;
     }
+
+    private void updateUserStatus(int userId, String newStatus) {
+        String updateSql = "UPDATE users SET u_status = ? WHERE u_id = ?";
+        db.updateRecord(updateSql, newStatus, userId);
+    }
+
 
     private void viewAllUsers() {
         String query = "SELECT u_id, u_name, u_email, u_type, u_status FROM users";
@@ -77,7 +82,6 @@ public class UserService {
         System.out.println("---------------------------------------------------------------------------------");
     }
 
-    // ===================== USER CRUD/FLOW ===========================
 
     public void registerUser(Scanner sc) {
         System.out.print("Enter name: ");
@@ -136,15 +140,14 @@ public class UserService {
         }
     }
     
-    // ===================== MENU FUNCTIONS ===========================
 
     private void adminMenu(Scanner sc, ResidentService residentService) {
         int choice = 0;
         do {
             System.out.println("\n--- ADMIN MENU ---");
-            System.out.println("1. Resident Management"); // NEW SEPARATE OPTION
-            System.out.println("2. Purok Management"); // NEW SEPARATE OPTION
-            System.out.println("3. Manage User Accounts"); // SHIFTED OPTION
+            System.out.println("1. Resident Management");
+            System.out.println("2. Purok Management");
+            System.out.println("3. Manage User Accounts");
             System.out.println("0. Logout");
             System.out.print("Choice: ");
             if (!sc.hasNextInt()) {
@@ -156,7 +159,6 @@ public class UserService {
             sc.nextLine();
 
             switch (choice) {
-                // Calls the public management methods now exposed by ResidentService
                 case 1: residentService.manageResidents(sc); break;
                 case 2: residentService.managePuroks(sc); break; 
                 case 3: manageUsers(sc); break;
@@ -181,7 +183,7 @@ public class UserService {
                 continue;
             }
             choice = sc.nextInt();
-            sc.nextLine(); // consume newline
+            sc.nextLine();
 
             switch (choice) {
                 case 1: residentService.viewResidentsByPurok(sc); break; 
@@ -193,14 +195,13 @@ public class UserService {
         } while (choice != 0);
     }
     
-    // ===================== ADMIN MANAGEMENT FUNCTIONS ===========================
     
     private void manageUsers(Scanner sc) {
         int subChoice = 0;
         do {
             System.out.println("\n--- MANAGE USER ACCOUNTS ---");
             System.out.println("1. View All Users");
-            System.out.println("2. View Pending Users"); 
+            System.out.println("2. Manage Pending Users");
             System.out.println("3. Delete User Account");
             System.out.println("0. Back to Admin Menu");
             System.out.print("Choice: ");
@@ -214,17 +215,85 @@ public class UserService {
 
             switch (subChoice) {
                 case 1: viewAllUsers(); break;
-                case 2: viewUsersByStatus("Pending"); break;
+                case 2: managePendingUsers(sc); break;
                 case 3: deleteUser(sc); break;
                 case 0: return;
                 default: System.out.println("Invalid choice!");
             }
         } while (subChoice != 0);
     }
+
+    private void managePendingUsers(Scanner sc) {
+        viewUsersByStatus("Pending");
+
+        String checkQuery = "SELECT COUNT(u_id) AS Count FROM users WHERE u_status = 'Pending'";
+        List<Map<String, Object>> result = db.fetchRecords(checkQuery);
+        Object countObj = result.get(0).get("Count");
+        long pendingCount = 0;
+        if (countObj instanceof Long) pendingCount = (Long) countObj;
+        if (countObj instanceof Integer) pendingCount = (Integer) countObj;
+
+        if (pendingCount == 0) {
+            System.out.println("✅ All pending users have been managed.");
+            return;
+        }
+        
+        System.out.println("\n--- Manage Pending User ---");
+        System.out.print("Enter User ID to **ACTIVATE** or **DELETE** (or 0 to cancel): ");
+        int userId = 0;
+        if (sc.hasNextInt()) {
+            userId = sc.nextInt();
+        } else {
+            System.out.println("🛑 Error: Invalid input. Please enter a number.");
+            sc.nextLine();
+            return;
+        }
+        sc.nextLine();
+
+        if (userId == 0) {
+            System.out.println("Operation cancelled.");
+            return;
+        }
+
+        if (!userExists(userId)) {
+            System.out.println("🛑 Error: User ID " + userId + " does not exist. Returning to menu.");
+            return; 
+        }
+
+        String statusQuery = "SELECT u_status FROM users WHERE u_id = ?";
+        List<Map<String, Object>> statusResult = db.fetchRecords(statusQuery, userId);
+        if (!statusResult.isEmpty()) {
+            String currentStatus = (String) statusResult.get(0).get("u_status");
+            if (!currentStatus.equalsIgnoreCase("Pending")) {
+                System.out.println("🛑 Error: User ID " + userId + " has status **" + currentStatus + "**. Only **Pending** users can be managed here.");
+                return;
+            }
+        }
+
+        System.out.print("Choose action for User ID " + userId + " (A=Activate / D=Delete / C=Cancel): ");
+        String action = sc.nextLine();
+        
+        if (action.equalsIgnoreCase("A")) {
+            updateUserStatus(userId, "Active");
+            System.out.println("User ID " + userId + " **activated** successfully! The user can now log in. 🎉");
+        } else if (action.equalsIgnoreCase("D")) {
+            System.out.print("⚠️ WARNING: Deleting a user is permanent. Confirm deletion for User ID " + userId + " (Y/N): ");
+            String confirmation = sc.nextLine();
+            
+            if (confirmation.equalsIgnoreCase("Y")) {
+                db.deleteRecord("DELETE FROM users WHERE u_id = ?", userId);
+                System.out.println("User ID " + userId + " **deleted** successfully. 🗑️");
+            } else {
+                System.out.println("Deletion cancelled.");
+            }
+        } else {
+            System.out.println("Operation cancelled.");
+        }
+    }
     
     private void deleteUser(Scanner sc) {
         viewAllUsers();
-        System.out.print("Enter User ID to **DELETE**: ");
+        System.out.print("Enter User ID to DELETE: ");
         int userId;
         if (sc.hasNextInt()) {
             userId = sc.nextInt();
